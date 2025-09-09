@@ -19,7 +19,7 @@ services:
           name: holify-db
           property: password
       - key: JWT_SECRET
-        value: "your-super-secret"
+        value: "G7r8vL2pZqN4xJ5kT9mH3sW8dF1bR0yU"
 
 databases:
   - name: holify-db
