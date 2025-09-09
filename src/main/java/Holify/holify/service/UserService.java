@@ -64,7 +64,7 @@ public class UserService {
         tokenRepository.save(verificationToken);
 
         // send email
-        String link = "http://localhost:8080/api/auth/verify?token=" + token;
+        String link = "https://holify.onrender.com/api/auth/verify?token=" + token;
         mailService.sendMail(
                 user.getEmail(),
                 "Verify your Holify account",
