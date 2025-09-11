@@ -125,9 +125,44 @@ public class UserService {
         );
     }
 
+//    public LoginResponse login(LoginRequest request) {
+//        // find user
+//        User user = userRepository.findByEmail(request.getEmail())
+//                .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+//
+//        // check password
+//        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+//            throw new RuntimeException("Invalid credentials");
+//        }
+//
+//        // ensure verified
+//        if (!user.getVerified()) {
+//            throw new RuntimeException("Please verify your email before login");
+//        }
+//
+//        // generate token
+//        String token = jwtUtil.generateToken(user.getEmail(), 0);
+//
+//        // build response DTO
+//        UserResponseDTO userDTO = new UserResponseDTO(
+//                user.getId(),
+//                user.getFirstname(),
+//                user.getLastname(),
+//                user.getUsername(),
+//                user.getEmail(),
+//                user.getGender(),
+//                user.getDob(),
+//                user.getVerified()
+//        );
+//
+//        return new LoginResponse(token, userDTO);
+//    }
+
+
     public LoginResponse login(LoginRequest request) {
-        // find user
-        User user = userRepository.findByEmail(request.getEmail())
+        // Try finding user by email first, then by username
+        User user = userRepository.findByEmail(request.getIdentifier())
+                .or(() -> userRepository.findByUsername(request.getIdentifier()))
                 .orElseThrow(() -> new RuntimeException("Invalid credentials"));
 
         // check password
@@ -140,8 +175,8 @@ public class UserService {
             throw new RuntimeException("Please verify your email before login");
         }
 
-        // generate token
-        String token = jwtUtil.generateToken(user.getEmail(), 0);
+        // generate token (you can choose username or email as subject)
+        String token = jwtUtil.generateToken(user.getUsername(), 0);
 
         // build response DTO
         UserResponseDTO userDTO = new UserResponseDTO(
