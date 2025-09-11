@@ -30,9 +30,10 @@ public class UserController {
 
     // ✅ Get User by ID
     @GetMapping("/{id}")
-    public ResponseEntity<User> getUserById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<User>> getUserById(@PathVariable Long id) {
         return ResponseEntity.ok(userService.getUserById(id));
     }
+
 
     // ✅ Update User
     @PutMapping("/{id}")

@@ -1,5 +1,6 @@
 package Holify.holify.service;
 
+import Holify.holify.ENUMS.OtpPurpose;
 import Holify.holify.entity.OtpToken;
 import Holify.holify.entity.User;
 import Holify.holify.repository.OtpTokenRepository;
@@ -31,14 +32,16 @@ public class OtpService {
     }
 
     @Transactional
-    public ApiResponse sendOtp(OtpRequest request) {
+    public ApiResponse<String> sendOtp(OtpRequest request) {
         Optional<User> userOpt = userRepository.findByEmail(request.getEmail());
         if (userOpt.isEmpty()) {
-            return new ApiResponse("User not found with this email");
+            return new ApiResponse<>(false, "User not found with this email", "USER_NOT_FOUND", null);
         }
 
+        // cast into an enum class
+        OtpPurpose purpose = OtpPurpose.valueOf(request.getPurpose());
         // clear any existing OTP for this email & purpose
-        otpTokenRepository.deleteByEmailAndPurpose(request.getEmail(), request.getPurpose());
+        otpTokenRepository.deleteByEmailAndPurpose(request.getEmail(), purpose);
 
         // generate OTP
         String otp = generateOtp();
@@ -48,10 +51,10 @@ public class OtpService {
         OtpToken otpToken = OtpToken.builder()
                 .email(request.getEmail())
                 .otp(otp)
-                .purpose(request.getPurpose())
+                .purpose(purpose)
                 .expiryTime(expiry)
                 .build();
-        otpTokenRepository.save(otpToken);
+        otpTokenRepository.saveAndFlush(otpToken);
 
         // send via email
         mailService.sendMail(
@@ -60,22 +63,21 @@ public class OtpService {
                 "Your OTP is: " + otp + "\nIt will expire in 15 minutes."
         );
 
-        return new ApiResponse("OTP sent successfully for " + request.getPurpose());
+        return new ApiResponse<>(true, "OTP sent successfully for " + request.getPurpose(), null, null);
     }
-
-    @Transactional
-    public ApiResponse verifyOtp(VerifyOtpRequest request) {
+    public ApiResponse<String> verifyOtp(VerifyOtpRequest request) {
+        OtpPurpose purpose = OtpPurpose.valueOf(request.getPurpose());
         Optional<OtpToken> otpOpt = otpTokenRepository.findByEmailAndOtpAndPurpose(
-                request.getEmail(), request.getOtp(), request.getPurpose()
+                request.getEmail(), request.getOtp(), purpose
         );
 
         if (otpOpt.isEmpty()) {
-            return new ApiResponse("Invalid OTP");
+            return new ApiResponse<>(false, "Invalid OTP", "INVALID_OTP", null);
         }
 
         OtpToken otpToken = otpOpt.get();
         if (otpToken.getExpiryTime().isBefore(LocalDateTime.now())) {
-            return new ApiResponse("OTP expired");
+            return new ApiResponse<>(false, "OTP expired", "OTP_EXPIRED", null);
         }
 
         // cleanup
@@ -86,56 +88,25 @@ public class OtpService {
             User user = userRepository.findByEmail(request.getEmail())
                     .orElseThrow(() -> new RuntimeException("User not found"));
             String jwtToken = jwtUtil.generateToken(user.getUsername(), 0);
-            return new ApiResponse("OTP verified successfully (Login)", jwtToken);
+            return new ApiResponse<>(true, "OTP verified successfully (Login)", null, jwtToken);
         }
 
         if ("RESET_PASSWORD".equalsIgnoreCase(request.getPurpose())) {
             // 🔑 Generate short-lived reset token
             String resetToken = jwtUtil.generateToken(request.getEmail(), 10 * 60 * 1000);
-            return new ApiResponse("OTP verified successfully (Reset Password)", resetToken);
+            return new ApiResponse<>(true, "OTP verified successfully (Reset Password)", null, resetToken);
         }
 
-        return new ApiResponse("Unknown purpose");
+        return new ApiResponse<>(false, "Unknown purpose", "UNKNOWN_PURPOSE", null);
     }
 
 
-    // ✅ 1. Generate and send OTP
-//    @Transactional
-//    public ApiResponse sendOtp(OtpRequest request) {
-//        Optional<User> userOpt = userRepository.findByEmail(request.getEmail());
-//        if (userOpt.isEmpty()) {
-//            return new ApiResponse("User not found with this email");
-//        }
-//
-//        // clear any existing OTP for this email
-//        otpTokenRepository.deleteByEmail(request.getEmail());
-//
-//        // generate OTP
-//        String otp = generateOtp();
-//        LocalDateTime expiry = LocalDateTime.now().plusMinutes(15);
-//
-//        // save in DB
-//        OtpToken otpToken = OtpToken.builder()
-//                .email(request.getEmail())
-//                .otp(otp)
-//                .expiryTime(expiry)
-//                .build();
-//        otpTokenRepository.save(otpToken);
-//
-//        // send via email
-//        mailService.sendMail(
-//                request.getEmail(),
-//                "Your OTP Code",
-//                "Your OTP is: " + otp + "\nIt will expire in 15 minutes."
-//        );
-//
-//        return new ApiResponse("OTP sent successfully to " + request.getEmail());
-//    }
-//
-//    // ✅ 2. Verify OTP
 //    @Transactional
 //    public ApiResponse verifyOtp(VerifyOtpRequest request) {
-//        Optional<OtpToken> otpOpt = otpTokenRepository.findByEmailAndOtp(request.getEmail(), request.getOtp());
+//        Optional<OtpToken> otpOpt = otpTokenRepository.findByEmailAndOtpAndPurpose(
+//                request.getEmail(), request.getOtp(), request.getPurpose()
+//        );
+//
 //        if (otpOpt.isEmpty()) {
 //            return new ApiResponse("Invalid OTP");
 //        }
@@ -145,21 +116,23 @@ public class OtpService {
 //            return new ApiResponse("OTP expired");
 //        }
 //
-//        // ✅ OTP is valid → cleanup
+//        // cleanup
 //        otpTokenRepository.delete(otpToken);
 //
-//        // 🔑 Get user from DB
-//        User user = userRepository.findByEmail(request.getEmail())
-//                .orElseThrow(() -> new RuntimeException("User not found"));
+//        if ("LOGIN".equalsIgnoreCase(request.getPurpose())) {
+//            // 🔑 Generate normal JWT for login
+//            User user = userRepository.findByEmail(request.getEmail())
+//                    .orElseThrow(() -> new RuntimeException("User not found"));
+//            String jwtToken = jwtUtil.generateToken(user.getUsername(), 0);
+//            return new ApiResponse("OTP verified successfully (Login)", jwtToken);
+//        }
 //
-//        // 🔑 Extract username
-//        String username = user.getUsername();
+//        if ("RESET_PASSWORD".equalsIgnoreCase(request.getPurpose())) {
+//            // 🔑 Generate short-lived reset token
+//            String resetToken = jwtUtil.generateToken(request.getEmail(), 10 * 60 * 1000);
+//            return new ApiResponse("OTP verified successfully (Reset Password)", resetToken);
+//        }
 //
-//        // ✅ Reuse existing JWT util
-//        String jwtToken = jwtUtil.generateToken(username); // or however your util works
-//
-//
-//        // TODO: Issue JWT or mark user as logged in if the otp was requested at login
-//        return new ApiResponse("OTP verified successfully. You can now log in.", jwtToken);
+//        return new ApiResponse("Unknown purpose");
 //    }
 }

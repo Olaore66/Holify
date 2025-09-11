@@ -1,5 +1,6 @@
 package Holify.holify.controller;
 
+import Holify.holify.ENUMS.OtpPurpose;
 import Holify.holify.dto.*;
 import Holify.holify.entity.User;
 import Holify.holify.repository.UserRepository;
@@ -48,7 +49,7 @@ public class AuthController {
     }
 
     @PutMapping("/{id}/profile")
-    public ResponseEntity<ApiResponse> completeProfile(
+    public ResponseEntity<ApiResponse<UserResponseDTO>> completeProfile(
             @PathVariable Long id,
             @RequestBody ProfileUpdateRequest request) {
 
@@ -56,27 +57,49 @@ public class AuthController {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!Boolean.TRUE.equals(user.getVerified())) {
-            return ResponseEntity.badRequest().body(new ApiResponse("Please verify your email first."));
+            return ResponseEntity.badRequest()
+                    .body(new ApiResponse<>(false,
+                            "Please verify your email first.",
+                            "EMAIL_NOT_VERIFIED",
+                            null));
         }
 
-        user.setGender(request.getGender());
-        user.setDob(request.getDob());
-        userRepository.save(user);
-
-        ApiResponse<User> response = userService.completeProfile(id, request);
+        ApiResponse<UserResponseDTO> response = userService.completeProfile(id, request);
         return ResponseEntity.ok(response);
-//        return ResponseEntity.ok(new ApiResponse("Profile completed successfully!"));
+    }
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@RequestBody LoginRequest request) {
+        try {
+            LoginResponse loginResponse = userService.login(request);
+
+            return ResponseEntity.ok(
+                    new ApiResponse<>(true, "Login successful", null, loginResponse)
+            );
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(
+                    new ApiResponse<>(false, e.getMessage(), "LOGIN_FAILED", null)
+            );
+        }
     }
 
-    @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
-        return ResponseEntity.ok(userService.login(request));
-    }
 
     @PostMapping("/request-otp")
-    public ResponseEntity<ApiResponse> sendOtp(@RequestBody OtpRequest request) {
-        return ResponseEntity.ok(otpService.sendOtp(request));
+    public ResponseEntity<?> requestOtp(@RequestBody OtpRequest request) {
+        // Convert the string from Postman to the enum
+        OtpPurpose purpose;
+        try {
+            purpose = OtpPurpose.valueOf(request.getPurpose()); // request.getPurpose() = "LOGIN"
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("Invalid OTP purpose: " + request.getPurpose());
+        }
+
+        // Call the service to send OTP
+
+        otpService.sendOtp(request);
+
+        return ResponseEntity.ok("OTP sent successfully");
     }
+
 
     @PostMapping("/verify-otp")
     public ResponseEntity<ApiResponse> verifyOtp(@RequestBody VerifyOtpRequest request) {

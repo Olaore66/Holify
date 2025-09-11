@@ -1,5 +1,6 @@
 package Holify.holify.entity;
 
+import Holify.holify.ENUMS.OtpPurpose;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -27,8 +28,18 @@ public class OtpToken {
     @Column(nullable = false)
     private LocalDateTime expiryTime;
 
-    private String purpose; // LOGIN or RESET_PASSWORD
+    @Enumerated(EnumType.STRING) // LOGIN or RESET_PASSWORD
+    @Column(nullable = false, length = 20)
+    private OtpPurpose purpose;
+
 
     @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
+        }
+    }
 }

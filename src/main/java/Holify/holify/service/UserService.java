@@ -28,19 +28,21 @@ public class UserService {
 
 
     @Transactional
-    public ApiResponse registerUser(UserRegistrationRequest request) {
-        // check if email already exists
-//        if (userRepository.existsByEmail(request.getEmail())) {
-//            return new ApiResponse("Email already registered");
-//        }
-
+    public ApiResponse<UserResponseDTO> registerUser(UserRegistrationRequest request) {
+        // check username
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
-            return new ApiResponse("Username already exists: " + request.getUsername());
+            return new ApiResponse<>(false,
+                    "Username already exists: " + request.getUsername(),
+                    "USERNAME_EXISTS",
+                    null);
         }
 
-        // Optionally check if email already exists too
+        // check email
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            return new ApiResponse("Email already exists: " + request.getEmail());
+            return new ApiResponse<>(false,
+                    "Email already exists: " + request.getEmail(),
+                    "EMAIL_EXISTS",
+                    null);
         }
 
         // create new user
@@ -64,7 +66,7 @@ public class UserService {
                 .build();
         tokenRepository.save(verificationToken);
 
-        // send email
+        // send verification email
         String link = "https://holify.onrender.com/api/auth/verify?token=" + token;
         mailService.sendMail(
                 user.getEmail(),
@@ -72,21 +74,41 @@ public class UserService {
                 "Click the link to verify your account: " + link
         );
 
-        return new ApiResponse("User registered. Please check your email to verify your account.");
+        UserResponseDTO dto = new UserResponseDTO(
+                user.getId(),
+                user.getFirstname(),
+                user.getLastname(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getGender(),
+                user.getDob(),
+                user.getVerified()
+        );
+
+        return new ApiResponse<>(true,
+                "User registered. Please check your email to verify your account.",
+                null,
+                dto);
     }
 
     @Transactional
-    public ApiResponse verifyUser(String token) {
+    public ApiResponse<UserResponseDTO> verifyUser(String token) {
         Optional<VerificationToken> optional = tokenRepository.findByToken(token);
 
         if (optional.isEmpty()) {
-            return new ApiResponse("Invalid or expired verification link.");
+            return new ApiResponse<>(false,
+                    "Invalid or expired verification link.",
+                    "INVALID_TOKEN",
+                    null);
         }
 
         VerificationToken verificationToken = optional.get();
 
         if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-            return new ApiResponse("Verification link has expired.");
+            return new ApiResponse<>(false,
+                    "Verification link has expired.",
+                    "TOKEN_EXPIRED",
+                    null);
         }
 
         User user = verificationToken.getUser();
@@ -95,11 +117,25 @@ public class UserService {
 
         tokenRepository.delete(verificationToken);
 
-        return new ApiResponse("Account verified successfully!", user.getId());
+        UserResponseDTO dto = new UserResponseDTO(
+                user.getId(),
+                user.getFirstname(),
+                user.getLastname(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getGender(),
+                user.getDob(),
+                user.getVerified()
+        );
+
+        return new ApiResponse<>(true,
+                "Account verified successfully!",
+                null,
+                dto);
     }
 
     @Transactional
-    public ApiResponse<User> completeProfile(Long id, ProfileUpdateRequest request) {
+    public ApiResponse<UserResponseDTO> completeProfile(Long id, ProfileUpdateRequest request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -108,7 +144,7 @@ public class UserService {
 
         User updatedUser = userRepository.save(user);
 
-        // Map manually (or with ModelMapper if you like)
+        // Map to DTO
         UserResponseDTO responseDTO = new UserResponseDTO(
                 updatedUser.getId(),
                 updatedUser.getFirstname(),
@@ -119,10 +155,8 @@ public class UserService {
                 updatedUser.getDob(),
                 updatedUser.getVerified()
         );
-        return new ApiResponse(
-                "Profile updated successfully!",
-                responseDTO
-        );
+
+        return new ApiResponse<>(true, "Profile updated successfully!", null, responseDTO);
     }
 
 //    public LoginResponse login(LoginRequest request) {
@@ -161,9 +195,14 @@ public class UserService {
 
     public LoginResponse login(LoginRequest request) {
         // Try finding user by email first, then by username
-        User user = userRepository.findByEmail(request.getIdentifier())
-                .or(() -> userRepository.findByUsername(request.getIdentifier()))
-                .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+        Optional<User> optionalUser = userRepository.findByEmail(request.getIdentifier())
+                .or(() -> userRepository.findByUsername(request.getIdentifier()));
+
+        if (optionalUser.isEmpty()) {
+            throw new RuntimeException("Invalid credentials");
+        }
+
+        User user = optionalUser.get();
 
         // check password
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
@@ -175,7 +214,7 @@ public class UserService {
             throw new RuntimeException("Please verify your email before login");
         }
 
-        // generate token (you can choose username or email as subject)
+        // generate token
         String token = jwtUtil.generateToken(user.getUsername(), 0);
 
         // build response DTO
@@ -200,44 +239,70 @@ public class UserService {
     }
 
     // ✅ Get User by ID
-    public User getUserById(Long id) {
-        return userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    public ApiResponse<User> getUserById(Long id) {
+        Optional<User> userOpt = userRepository.findById(id);
+
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            return new ApiResponse<>(true, "User fetched successfully", null, user);
+        } else {
+            return new ApiResponse<>(false, "User not found", "USER_NOT_FOUND", null);
+        }
     }
 
-    // ✅ Update User
-    public ApiResponse updateUser(Long id, User updatedUser) {
-        User existingUser = getUserById(id);
 
+
+
+    // ✅ Update User
+    public ApiResponse<User> updateUser(Long id, User updatedUser) {
+        Optional<User> optionalUser = userRepository.findById(id);
+
+        if (optionalUser.isEmpty()) {
+            return new ApiResponse<>(false, "User not found", "USER_NOT_FOUND", null);
+        }
+
+        User existingUser = optionalUser.get();
         existingUser.setFirstname(updatedUser.getFirstname());
         existingUser.setLastname(updatedUser.getLastname());
         existingUser.setEmail(updatedUser.getEmail());
         existingUser.setUsername(updatedUser.getUsername());
         // add more fields depending on your User entity
 
-        userRepository.save(existingUser);
-        return new ApiResponse("User updated successfully");
+        User saved = userRepository.save(existingUser);
+        return new ApiResponse<>(true, "User updated successfully", null, saved);
     }
+
 
     // ✅ Delete User
-    public ApiResponse deleteUser(Long id) {
-        User existingUser = getUserById(id);
-        userRepository.delete(existingUser);
-        return new ApiResponse("User deleted successfully");
-    }
+    public ApiResponse<Void> deleteUser(Long id) {
+        Optional<User> optionalUser = userRepository.findById(id);
 
-    public ApiResponse resetPassword(ResetPasswordRequest request) {
-        String email = jwtUtil.getUsernameFromToken(request.getResetToken());
-        if (email == null) {
-            return new ApiResponse("Invalid reset token");
+        if (optionalUser.isEmpty()) {
+            return new ApiResponse<>(false, "User not found", "USER_NOT_FOUND", null);
         }
 
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        userRepository.delete(optionalUser.get());
+        return new ApiResponse<>(true, "User deleted successfully", null, null);
+    }
 
+
+    public ApiResponse<Void> resetPassword(ResetPasswordRequest request) {
+        String email = jwtUtil.getUsernameFromToken(request.getResetToken());
+
+        if (email == null) {
+            return new ApiResponse<>(false, "Invalid reset token", "INVALID_TOKEN", null);
+        }
+
+        Optional<User> optionalUser = userRepository.findByEmail(email);
+        if (optionalUser.isEmpty()) {
+            return new ApiResponse<>(false, "User not found", "USER_NOT_FOUND", null);
+        }
+
+        User user = optionalUser.get();
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
-        return new ApiResponse("Password reset successful");
+        return new ApiResponse<>(true, "Password reset successful", null, null);
     }
+
 }
