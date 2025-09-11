@@ -27,6 +27,8 @@ public class OtpToken {
     @Column(nullable = false)
     private LocalDateTime expiryTime;
 
+    private String purpose; // LOGIN or RESET_PASSWORD
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

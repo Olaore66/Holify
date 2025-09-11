@@ -23,9 +23,15 @@ public class JwtUtil {
     }
 
     // ✅ Generate JWT token
-    public String generateToken(String username) {
+    public String generateToken(String username, int expiryMillis) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + jwtExpirationMs);
+
+        Date expiry;
+        if(expiryMillis > 0) {
+            expiry = new Date(now.getTime() + expiryMillis);
+        }else {
+            expiry = new Date(now.getTime() + jwtExpirationMs);
+        }
 
         return Jwts.builder()
                 .setSubject(username)

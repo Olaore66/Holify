@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -140,7 +141,7 @@ public class UserService {
         }
 
         // generate token
-        String token = jwtUtil.generateToken(user.getEmail());
+        String token = jwtUtil.generateToken(user.getEmail(), 0);
 
         // build response DTO
         UserResponseDTO userDTO = new UserResponseDTO(
@@ -157,4 +158,51 @@ public class UserService {
         return new LoginResponse(token, userDTO);
     }
 
+    // SAM REQUESTED FOR CRUD OPERATION
+    // ✅ Get All Users
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
+    }
+
+    // ✅ Get User by ID
+    public User getUserById(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    // ✅ Update User
+    public ApiResponse updateUser(Long id, User updatedUser) {
+        User existingUser = getUserById(id);
+
+        existingUser.setFirstname(updatedUser.getFirstname());
+        existingUser.setLastname(updatedUser.getLastname());
+        existingUser.setEmail(updatedUser.getEmail());
+        existingUser.setUsername(updatedUser.getUsername());
+        // add more fields depending on your User entity
+
+        userRepository.save(existingUser);
+        return new ApiResponse("User updated successfully");
+    }
+
+    // ✅ Delete User
+    public ApiResponse deleteUser(Long id) {
+        User existingUser = getUserById(id);
+        userRepository.delete(existingUser);
+        return new ApiResponse("User deleted successfully");
+    }
+
+    public ApiResponse resetPassword(ResetPasswordRequest request) {
+        String email = jwtUtil.getUsernameFromToken(request.getResetToken());
+        if (email == null) {
+            return new ApiResponse("Invalid reset token");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        return new ApiResponse("Password reset successful");
+    }
 }
