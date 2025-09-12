@@ -97,7 +97,21 @@ public class OtpService {
             return new ApiResponse<>(true, "OTP verified successfully (Reset Password)", null, resetToken);
         }
 
+        if ("VERIFY_EMAIL".equalsIgnoreCase(request.getPurpose())) {
+            User user = userRepository.findByEmail(request.getEmail())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            user.setVerified(true);
+            userRepository.save(user);
+
+            return new ApiResponse<>(true, "Email verified successfully", null, null);
+        }
+
+
         return new ApiResponse<>(false, "Unknown purpose", "UNKNOWN_PURPOSE", null);
+
+
+
     }
 
 

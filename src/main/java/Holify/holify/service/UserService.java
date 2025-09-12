@@ -25,6 +25,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final MailService mailService;
     private final JwtUtil jwtUtil;
+    private final OtpService otpService;
 
 
     @Transactional
@@ -57,22 +58,28 @@ public class UserService {
 
         userRepository.save(user);
 
-        // generate verification token
-        String token = UUID.randomUUID().toString();
-        VerificationToken verificationToken = VerificationToken.builder()
-                .token(token)
-                .user(user)
-                .expiryDate(LocalDateTime.now().plusHours(24)) // valid for 24h
-                .build();
-        tokenRepository.save(verificationToken);
+//        // generate verification token
+//        String token = UUID.randomUUID().toString();
+//        VerificationToken verificationToken = VerificationToken.builder()
+//                .token(token)
+//                .user(user)
+//                .expiryDate(LocalDateTime.now().plusHours(24)) // valid for 24h
+//                .build();
+//        tokenRepository.save(verificationToken);
+//
+//        // send verification email
+//        String link = "https://holify.onrender.com/api/auth/verify?token=" + token;
+//        mailService.sendMail(
+//                user.getEmail(),
+//                "Verify your Holify account",
+//                "Click the link to verify your account: " + link
+//        );
 
-        // send verification email
-        String link = "https://holify.onrender.com/api/auth/verify?token=" + token;
-        mailService.sendMail(
-                user.getEmail(),
-                "Verify your Holify account",
-                "Click the link to verify your account: " + link
-        );
+        // 📩 send OTP for email verification
+        OtpRequest otpRequest = new OtpRequest();
+        otpRequest.setEmail(user.getEmail());
+        otpRequest.setPurpose("VERIFY_EMAIL");
+        otpService.sendOtp(otpRequest);
 
         UserResponseDTO dto = new UserResponseDTO(
                 user.getId(),

@@ -94,7 +94,6 @@ public class AuthController {
         }
 
         // Call the service to send OTP
-
         otpService.sendOtp(request);
 
         return ResponseEntity.ok("OTP sent successfully");
