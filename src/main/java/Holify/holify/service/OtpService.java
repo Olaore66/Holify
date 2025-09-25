@@ -10,6 +10,8 @@ import Holify.holify.dto.VerifyOtpRequest;
 import Holify.holify.dto.ApiResponse;
 import Holify.holify.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,8 @@ public class OtpService {
     private final UserRepository userRepository;
     private final MailService mailService; // ✅ your existing mail sender
     private final JwtUtil jwtUtil;
+
+    private static final Logger log = LoggerFactory.getLogger(OtpService.class);
     private String generateOtp() {
         Random random = new Random();
         int otp = 1000 + random.nextInt(9000); // 6-digit
@@ -39,7 +43,13 @@ public class OtpService {
         }
 
         // cast into an enum class
-        OtpPurpose purpose = OtpPurpose.valueOf(request.getPurpose());
+        OtpPurpose purpose;
+        try {
+            purpose = OtpPurpose.valueOf(request.getPurpose().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid OTP purpose: {}", request.getPurpose(), e);
+            return new ApiResponse<>(false, "Invalid OTP purpose", "INVALID_PURPOSE", null);
+        }
         // clear any existing OTP for this email & purpose
         otpTokenRepository.deleteByEmailAndPurpose(request.getEmail(), purpose);
 
@@ -57,11 +67,15 @@ public class OtpService {
         otpTokenRepository.saveAndFlush(otpToken);
 
         // send via email
-        mailService.sendMail(
-                request.getEmail(),
-                "Your OTP Code",
-                "Your OTP is: " + otp + "\nIt will expire in 15 minutes."
-        );
+        try {
+            mailService.sendMail(
+                    request.getEmail(),
+                    "Your OTP Code",
+                    "Your OTP is: " + otp + "\nIt will expire in 15 minutes."
+            );
+        } catch (Exception e) {
+            log.error("❌ Email send failed", e);
+        }
 
         return new ApiResponse<>(true, "OTP sent successfully for " + request.getPurpose(), null, null);
     }

@@ -56,7 +56,8 @@ public class UserService {
                 .verified(false)
                 .build();
 
-        userRepository.save(user);
+//        userRepository.save(user);
+        userRepository.saveAndFlush(user);
 
 //        // generate verification token
 //        String token = UUID.randomUUID().toString();
