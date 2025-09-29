@@ -1,5 +1,6 @@
 package Holify.holify.service;
 
+import Holify.holify.config.UserRegisteredEvent;
 import Holify.holify.dto.*;
 import Holify.holify.entity.User;
 import Holify.holify.entity.VerificationToken;
@@ -9,6 +10,8 @@ import Holify.holify.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +34,8 @@ public class UserService {
 
     private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
+    @Autowired
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional
     public ApiResponse<UserResponseDTO> registerUser(UserRegistrationRequest request) {
@@ -60,30 +65,20 @@ public class UserService {
                 .verified(false)
                 .build();
 
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
 
-        // Send OTP for email verification
-        OtpRequest otpRequest = new OtpRequest();
-        otpRequest.setEmail(user.getEmail());
-        otpRequest.setPurpose("VERIFY_EMAIL");
-        otpService.sendOtp(otpRequest).thenAccept(response -> {
-            if (!response.isSuccess()) { // Assumes isSuccess() exists; adjust if needed
-                log.error("Failed to send OTP: {}", response.getMessage());
-            }
-        }).exceptionally(throwable -> {
-            log.error("Error processing OTP: {}", throwable.getMessage());
-            return null;
-        });
+        // Publish event for OTP sending
+        applicationEventPublisher.publishEvent(new UserRegisteredEvent(this, savedUser.getEmail(), "VERIFY_EMAIL"));
 
         UserResponseDTO dto = new UserResponseDTO(
-                user.getId(),
-                user.getFirstname(),
-                user.getLastname(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getGender(),
-                user.getDob(),
-                user.getVerified()
+                savedUser.getId(),
+                savedUser.getFirstname(),
+                savedUser.getLastname(),
+                savedUser.getUsername(),
+                savedUser.getEmail(),
+                savedUser.getGender(),
+                savedUser.getDob(),
+                savedUser.getVerified()
         );
 
         return new ApiResponse<>(true,
