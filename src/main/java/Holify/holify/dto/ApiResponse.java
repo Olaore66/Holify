@@ -11,6 +11,13 @@ public class ApiResponse<T> {
     private String errorCode; // optional for frontend mapping
     private T data;
 
+    public boolean isSuccess() { // or getSuccess()
+        return success;
+    }
+
+    public String getMessage() {
+        return message;
+    }
     public ApiResponse(boolean success, String message) {
         this.success = success;
         this.message = message;

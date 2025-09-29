@@ -7,6 +7,8 @@ import Holify.holify.repository.UserRepository;
 import Holify.holify.repository.VerificationTokenRepository;
 import Holify.holify.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
+
 
 @Service
 @RequiredArgsConstructor
@@ -27,10 +29,12 @@ public class UserService {
     private final JwtUtil jwtUtil;
     private final OtpService otpService;
 
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+
 
     @Transactional
     public ApiResponse<UserResponseDTO> registerUser(UserRegistrationRequest request) {
-        // check username
+        // Check username
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
             return new ApiResponse<>(false,
                     "Username already exists: " + request.getUsername(),
@@ -38,7 +42,7 @@ public class UserService {
                     null);
         }
 
-        // check email
+        // Check email
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             return new ApiResponse<>(false,
                     "Email already exists: " + request.getEmail(),
@@ -46,7 +50,7 @@ public class UserService {
                     null);
         }
 
-        // create new user
+        // Create new user
         User user = User.builder()
                 .firstname(request.getFirstname())
                 .lastname(request.getLastname())
@@ -56,31 +60,20 @@ public class UserService {
                 .verified(false)
                 .build();
 
-//        userRepository.save(user);
-        userRepository.saveAndFlush(user);
+        userRepository.save(user);
 
-//        // generate verification token
-//        String token = UUID.randomUUID().toString();
-//        VerificationToken verificationToken = VerificationToken.builder()
-//                .token(token)
-//                .user(user)
-//                .expiryDate(LocalDateTime.now().plusHours(24)) // valid for 24h
-//                .build();
-//        tokenRepository.save(verificationToken);
-//
-//        // send verification email
-//        String link = "https://holify.onrender.com/api/auth/verify?token=" + token;
-//        mailService.sendMail(
-//                user.getEmail(),
-//                "Verify your Holify account",
-//                "Click the link to verify your account: " + link
-//        );
-
-        // 📩 send OTP for email verification
+        // Send OTP for email verification
         OtpRequest otpRequest = new OtpRequest();
         otpRequest.setEmail(user.getEmail());
         otpRequest.setPurpose("VERIFY_EMAIL");
-        otpService.sendOtp(otpRequest);
+        otpService.sendOtp(otpRequest).thenAccept(response -> {
+            if (!response.isSuccess()) { // Assumes isSuccess() exists; adjust if needed
+                log.error("Failed to send OTP: {}", response.getMessage());
+            }
+        }).exceptionally(throwable -> {
+            log.error("Error processing OTP: {}", throwable.getMessage());
+            return null;
+        });
 
         UserResponseDTO dto = new UserResponseDTO(
                 user.getId(),
@@ -98,7 +91,6 @@ public class UserService {
                 null,
                 dto);
     }
-
     @Transactional
     public ApiResponse<UserResponseDTO> verifyUser(String token) {
         Optional<VerificationToken> optional = tokenRepository.findByToken(token);

@@ -12,12 +12,14 @@ import Holify.holify.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -35,38 +37,44 @@ public class OtpService {
         return String.valueOf(otp);
     }
 
+    @Async
     @Transactional
-    public ApiResponse<String> sendOtp(OtpRequest request) {
+    public CompletableFuture<ApiResponse<String>> sendOtp(OtpRequest request) {
         Optional<User> userOpt = userRepository.findByEmail(request.getEmail());
         if (userOpt.isEmpty()) {
-            return new ApiResponse<>(false, "User not found with this email", "USER_NOT_FOUND", null);
+            return CompletableFuture.completedFuture(
+                    new ApiResponse<>(false, "User not found with this email", "USER_NOT_FOUND", null)
+            );
         }
 
-        // cast into an enum class
+        // Cast into an enum class
         OtpPurpose purpose;
         try {
             purpose = OtpPurpose.valueOf(request.getPurpose().toUpperCase());
         } catch (IllegalArgumentException e) {
             log.error("Invalid OTP purpose: {}", request.getPurpose(), e);
-            return new ApiResponse<>(false, "Invalid OTP purpose", "INVALID_PURPOSE", null);
+            return CompletableFuture.completedFuture(
+                    new ApiResponse<>(false, "Invalid OTP purpose", "INVALID_PURPOSE", null)
+            );
         }
-        // clear any existing OTP for this email & purpose
+
+        // Clear any existing OTP for this email & purpose
         otpTokenRepository.deleteByEmailAndPurpose(request.getEmail(), purpose);
 
-        // generate OTP
+        // Generate OTP
         String otp = generateOtp();
         LocalDateTime expiry = LocalDateTime.now().plusMinutes(15);
 
-        // save in DB
+        // Save in DB
         OtpToken otpToken = OtpToken.builder()
                 .email(request.getEmail())
                 .otp(otp)
                 .purpose(purpose)
                 .expiryTime(expiry)
                 .build();
-        otpTokenRepository.saveAndFlush(otpToken);
+        otpTokenRepository.save(otpToken); // Changed to save for async compatibility
 
-        // send via email
+        // Send via email
         try {
             mailService.sendMail(
                     request.getEmail(),
@@ -75,9 +83,14 @@ public class OtpService {
             );
         } catch (Exception e) {
             log.error("❌ Email send failed", e);
+            return CompletableFuture.completedFuture(
+                    new ApiResponse<>(false, "Failed to send OTP email", "EMAIL_SEND_FAILED", null)
+            );
         }
 
-        return new ApiResponse<>(true, "OTP sent successfully for " + request.getPurpose(), null, null);
+        return CompletableFuture.completedFuture(
+                new ApiResponse<>(true, "OTP sent successfully for " + request.getPurpose(), null, null)
+        );
     }
     public ApiResponse<String> verifyOtp(VerifyOtpRequest request) {
         OtpPurpose purpose = OtpPurpose.valueOf(request.getPurpose());
