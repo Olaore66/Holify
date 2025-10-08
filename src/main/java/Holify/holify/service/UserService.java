@@ -190,8 +190,8 @@ public class UserService {
 
     public LoginResponse login(LoginRequest request) {
         // Try finding user by email first, then by username
-        Optional<User> optionalUser = userRepository.findByEmail(request.getIdentifier())
-                .or(() -> userRepository.findByUsername(request.getIdentifier()));
+        Optional<User> optionalUser = userRepository.findByEmail(request.getEmail())
+                .or(() -> userRepository.findByUsername(request.getEmail()));
 
         if (optionalUser.isEmpty()) {
             throw new RuntimeException("Invalid credentials");
