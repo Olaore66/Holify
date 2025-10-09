@@ -11,8 +11,8 @@ import java.util.Set;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Song {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
 
+    private Long id;
     private String title;
     private String artist;
     private String album;
